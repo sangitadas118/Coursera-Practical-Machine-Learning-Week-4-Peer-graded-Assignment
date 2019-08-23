@@ -40,8 +40,8 @@ library(e1071)
 Let's load the data. I have downloaded the data already on my local system. Please download the data from here : [Training](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) and [Testing](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv). And run this code on the same directory as the data.  
 
 ```{r}
-dfTrain <- read.csv("pml-training.csv", stringsAsFactors = F,na.strings = c("","NA"))
-dfTest <- read.csv("pml-testing.csv", stringsAsFactors = F,na.strings = c("","NA"))
+dfTrain <- read.csv("pml-training.csv", stringsAsFactors = F,na.strings = c("","NA","#DIV/0!"))
+dfTest <- read.csv("pml-testing.csv", stringsAsFactors = F,na.strings = c("","NA","#DIV/0!"))
 dim(dfTrain); dim(dfTest)
 ```
   
@@ -379,7 +379,7 @@ modelCT <- train(x = xTrain,y = yTrain,
 
 #RF
 modelRF <- train(x = xTrain,y = yTrain, 
-                 method = "rf", trControl = trControl,verbose=FALSE)
+                 method = "rf", trControl = trControl,verbose=FALSE, metric = "Accuracy")
 
 #GBM
 #taking too long
@@ -440,10 +440,76 @@ dfTest2 <- dfTest %>% select(final_cols,problem_id)
 xTest <- dfTest2 %>% select(final_cols)
   
 result <- data.frame("problem_id" = dfTest$problem_id,
-                     "PREDICTION" = predict(modelRF,xTest))
+                     "PREDICTION_RF" = predict(modelRF,xTest),
+                     "PREDICTION_GBM" = predict(modelGBM,xTest),
+                     "PREDICTION_SVM" = predict(modelSVM,xTest))
 
 result
 ```
+
+# This is odd- UPDATE  
+
+My validation accuracy is good but my score in the quize was not correct. Maybe I should have not droped the columns when I selected 17 features. As Random Forest is doing so go I'll train one more RF with all the data and see if it helps. But still I dont understand why even after my accuracy on validation is above 95, how it is so bad. Need to look into it.  
+
+So for this update I will use all the predictors. And as there are so many columns I'll make it parallel so it doesnot take that long.  
+
+```{r}
+
+dfTrainF2 <- tbl_df(dfTrain %>% 
+                      select(-column_2drop,
+                             -c(X,user_name, raw_timestamp_part_1, 
+                                raw_timestamp_part_2, cvtd_timestamp, 
+                                new_window,num_window)))
+xTrain2 <- dfTrainF2 %>% select(-classe)
+xTrain2 <- sapply(xTrain2,as.numeric)
+yTrain2 <- factor(dfTrainF2$classe,levels=levels)  
+
+dfValF2 <- tbl_df(dfVal %>% 
+                      select(-column_2drop,
+                             -c(X,user_name, raw_timestamp_part_1, 
+                                raw_timestamp_part_2, cvtd_timestamp, 
+                                new_window,num_window)))
+xVal2 <- dfValF2 %>% select(-classe)
+xVal2 <- sapply(xVal2,as.numeric)
+yVal2 <- factor(dfValF2$classe,levels=levels) 
+
+dfTestF2 <- tbl_df(dfTest %>% 
+                      select(-column_2drop,
+                             -c(X,user_name, raw_timestamp_part_1, 
+                                raw_timestamp_part_2, cvtd_timestamp, 
+                                new_window,num_window)))
+
+xTest2 <- dfTestF2 %>% select(-problem_id)
+xTest2 <- sapply(xTest2,as.numeric)
+pb_id <- dfValF2$classe
+
+library(doParallel)
+
+ncores <- makeCluster(detectCores() - 1)
+registerDoParallel(cores=ncores)
+getDoParWorkers() 
+
+modelRF2 <- train(x = xTrain2,y = yTrain2, method = "rf", 
+                 metric = "Accuracy", 
+                 trControl=trainControl(method = "cv", number = 4, 
+                                        p= 0.60, allowParallel = TRUE ))
+
+
+```
+
+```{r}
+#Check the result
+
+result2 <- data.frame("problem_id" = dfTest$problem_id,
+                     "PREDICTION_RF" = predict(modelRF,xTest),
+                     "PREDICTION_GBM" = predict(modelGBM,xTest),
+                     "PREDICTION_SVM" = predict(modelSVM,xTest),
+                     "PREDICTION_RF2_ALL_COL"=predict(modelRF2,xTest2))
+
+result2
+```
+
+This time I did better. May be because the test size is so small my previous models did so bad because my validation accuracy was ok.
 
 # reference  
 
