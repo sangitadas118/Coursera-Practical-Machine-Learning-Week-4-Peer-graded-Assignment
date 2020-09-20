@@ -1,6 +1,6 @@
 ---
 title: "Activity Recognition of Weight Lifting Exercises - Simple implimentation with R"
-author: "Anik Mallick"
+author: "Sangita Das"
 date: "`r Sys.Date()`"
 output:
   prettydoc::html_pretty:
